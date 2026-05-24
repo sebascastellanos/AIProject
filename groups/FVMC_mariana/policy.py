@@ -9,26 +9,31 @@ class FVMCConnect4Agent(Policy):
 
     def __init__(self):
         self.max_depth = 4
-
-    @override
-    def mount(self) -> None:
-        """
-        Se ejecuta antes de iniciar una partida.
-        Carga la tabla Q si existe. Si no existe, entrena el agente y guarda la tabla.
-        """
-
         self.Q = {}
         self.returns_count = {}
 
         self.q_values_path = os.path.join(
             os.path.dirname(__file__),
-            "q_values.pkl")
+            "q_values.pkl"
+        )
+
+    @override
+    def mount(self, *args, **kwargs) -> None:
+        """
+        Se ejecuta antes de iniciar una partida.
+
+        El autocalificador puede llamar mount(timeout), por eso se aceptan
+        *args y **kwargs.
+
+        Si existe la tabla Q, la carga.
+        Si no existe, entrena una versión ligera con 500 partidas por ficha.
+        """
 
         if os.path.exists(self.q_values_path):
             self.load_q_values()
         else:
-            self.train_fvmc(num_episodes=300, epsilon=0.2, agent_piece=-1)
-            self.train_fvmc(num_episodes=300, epsilon=0.2, agent_piece=1)
+            self.train_fvmc(num_episodes=500, epsilon=0.2, agent_piece=-1)
+            self.train_fvmc(num_episodes=500, epsilon=0.2, agent_piece=1)
             self.save_q_values()
 
     @override
@@ -47,7 +52,7 @@ class FVMCConnect4Agent(Policy):
         # Seguridad: si por alguna razón no hay columnas disponibles
         if len(available_cols) == 0:
             return 0
-        
+
         # Identificar qué ficha soy en este turno
         my_piece = self.get_current_player(s)
         opponent_piece = -my_piece
@@ -59,7 +64,11 @@ class FVMCConnect4Agent(Policy):
             return winning_move
 
         # 2. Si el oponente puede ganar en su próximo turno, bloqueo esa columna
-        opponent_winning_move = self.find_winning_move(s, opponent_piece, available_cols)
+        opponent_winning_move = self.find_winning_move(
+            s,
+            opponent_piece,
+            available_cols
+        )
         if opponent_winning_move is not None:
             return opponent_winning_move
 
@@ -76,28 +85,31 @@ class FVMCConnect4Agent(Policy):
     # ============================================================
 
     def find_winning_move(
-            self,
-            board: np.ndarray,
-            piece: int,
-            available_cols: list[int]) -> int | None:
-            """
-            Revisa si poniendo una ficha en alguna columna disponible, el jugador gana inmediatamente.
-            """
-            for col in available_cols:
-                temp_board = board.copy()
-                row = self.get_next_open_row(temp_board, col)
+        self,
+        board: np.ndarray,
+        piece: int,
+        available_cols: list[int]
+    ) -> int | None:
+        """
+        Revisa si poniendo una ficha en alguna columna disponible,
+        el jugador gana inmediatamente.
+        """
+        for col in available_cols:
+            temp_board = board.copy()
+            row = self.get_next_open_row(temp_board, col)
 
-                if row is not None:
-                    temp_board[row, col] = piece
+            if row is not None:
+                temp_board[row, col] = piece
 
-                    if self.is_winning_board(temp_board, piece):
-                        return col
+                if self.is_winning_board(temp_board, piece):
+                    return col
 
-            return None
+        return None
 
     def choose_strategic_column(self, available_cols: list[int]) -> int:
         """
-        Se prioriza el centro porque en Connect-4 suele dar más posibilidades de crear líneas horizontales y diagonales.
+        Se prioriza el centro porque en Connect-4 suele dar más posibilidades
+        de crear líneas horizontales y diagonales.
         """
 
         preferred_order = [3, 2, 4, 1, 5, 0, 6]
@@ -111,6 +123,22 @@ class FVMCConnect4Agent(Policy):
     # ============================================================
     # FVMC
     # ============================================================
+
+    def train_and_save_full_q_values(self) -> None:
+        """
+        Entrenamiento local recomendado para crear una tabla Q más fuerte.
+
+        Esta función se puede ejecutar localmente para generar q_values.pkl
+        con 10000 partidas como rojo y 10000 partidas como amarillo.
+        """
+
+        self.Q = {}
+        self.returns_count = {}
+
+        self.train_fvmc(num_episodes=10000, epsilon=0.2, agent_piece=-1)
+        self.train_fvmc(num_episodes=10000, epsilon=0.2, agent_piece=1)
+
+        self.save_q_values()
 
     def train_fvmc(
         self,
@@ -322,7 +350,8 @@ class FVMCConnect4Agent(Policy):
 
     def get_current_player(self, board: np.ndarray) -> int:
         """
-        Determina qué jugador debe mover según la cantidad de fichas en el tablero (-1: rojo, 1: amarillo).
+        Determina qué jugador debe mover según la cantidad de fichas
+        en el tablero (-1: rojo, 1: amarillo).
         """
         red_count = np.sum(board == -1)
         yellow_count = np.sum(board == 1)
@@ -344,7 +373,7 @@ class FVMCConnect4Agent(Policy):
 
     def apply_action(self, board: np.ndarray, col: int, piece: int) -> np.ndarray:
         """
-        Aplica una jugada en una copia del tablero y retorna el nuevo tablero. 
+        Aplica una jugada en una copia del tablero y retorna el nuevo tablero.
         """
         new_board = board.copy()
         row = self.get_next_open_row(new_board, col)
@@ -431,7 +460,7 @@ class FVMCConnect4Agent(Policy):
 
     def create_empty_board(self) -> np.ndarray:
         """
-        Crea un tablero vacío
+        Crea un tablero vacío.
         """
         return np.zeros((6, 7), dtype=int)
 
@@ -439,7 +468,7 @@ class FVMCConnect4Agent(Policy):
         """
         Convierte el tablero en una clave inmutable para poder usarlo en diccionarios.
 
-        Ideal para guardar valores Q[(estado, accion)] = valor_estimado
+        Ideal para guardar valores Q[(estado, accion)] = valor_estimado.
         """
         return tuple(board.flatten())
 

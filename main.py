@@ -9,7 +9,7 @@ participants = find_importable_classes("groups", Policy)
 #players = list(participants.items())
 
 # Solo prueba
-ignored_players = ["Group C"]
+ignored_players = ["Sebastian_ADP"]
 
 # Build a participant list (name, class)
 players = [
