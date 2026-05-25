@@ -1,24 +1,22 @@
+import numpy as np
 from connect4.policy import Policy
 from connect4.utils import find_importable_classes
-from tournament import run_tournament, play
+from tournament import run_tournament, play 
 
-# Read all files within subfolder of "groups"
+# 1. Leer los 4 participantes
 participants = find_importable_classes("groups", Policy)
-
-# Build a participant list (name, class)
 players = list(participants.items())
 
-# Build a participant list (name, class)
-players = [
-    participant
-    for participant in participants.items()
-    if participant[0] not in ignored_players
-]
+print("Participantes reales encontrados:", [p[0] for p in players])
 
-# Run the tournament
+# 2. Correr el torneo atrapando los 5 argumentos con *args
 champion = run_tournament(
-    players,
-    play,  # You could also create your own play function for testing purposes
-    shuffle=True,
+    players=players,
+    play=lambda *args: play(*args), # <-- ¡ESTA ES LA MAGIA! Recibe los 5 y pasa los 5
+    best_of=7,
+    first_player_distribution=0.5,
+    shuffle=True, 
+    seed=911
 )
-print("Champion:", champion)
+
+print("\n🏆 ¡EL CAMPEÓN DEL TORNEO OFICIAL ES:", champion[0])
