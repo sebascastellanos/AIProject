@@ -3,36 +3,15 @@ import math
 from connect4.policy import Policy
 from typing import override
 
-# ==============================================================================
-# MCTS + UCB1 + RAVE para Connect-4
-# Autora: Vale
-#
-# Mejoras sobre MCTS básico:
-#   1. Bitboard      → tablero como enteros de 64 bits, operaciones ~10x más rápidas
-#   2. RAVE          → Rapid Action Value Estimation, aprende más con menos simulaciones
-#   3. Ordenamiento  → columnas del centro primero (estadísticamente mejores)
-#   4. Detección fork→ detecta y crea/bloquea dobles amenazas antes de MCTS
-#
-# Parámetros configurables (variables del análisis):
-#   n_simulations : int   → simulaciones por movimiento
-#   c             : float → constante UCB1 (exploración vs explotación)
-#   k_rave        : float → peso RAVE (más alto = más influencia de RAVE)
-#   use_heuristic : bool  → rollout inteligente vs aleatorio
-# ==============================================================================
+
 
 ROWS = 6
 COLS = 7
 
-# Orden de columnas: centro primero (3,2,4,1,5,0,6)
-# Estratégicamente las columnas centrales dominan en Connect-4
+
 COL_ORDER = [3, 2, 4, 1, 5, 0, 6]
 
-# ==============================================================================
-# BITBOARD — representación ultrarrápida del tablero
-# ==============================================================================
-# El tablero se representa como dos enteros de 64 bits (uno por jugador).
-# Cada bit corresponde a una celda. Las operaciones de victoria y movimiento
-# se hacen con operaciones bitwise, ~10x más rápido que numpy.
+
 
 _COL_SHIFT = [c * (ROWS + 1) for c in range(COLS)]
 
@@ -58,16 +37,7 @@ WIN_MASKS = _build_win_masks()
 
 
 class BitBoard:
-    """
-    Representa el estado del juego con dos enteros de 64 bits.
-
-    Atributos
-    ----------
-    bb       : list[int]  → bb[0]=fichas jugador -1, bb[1]=fichas jugador 1
-    heights  : list[int]  → siguiente posición libre por columna (en bits)
-    player   : int        → jugador actual (-1 o 1)
-    n_moves  : int        → total de fichas colocadas
-    """
+   
 
     __slots__ = ("bb", "heights", "player", "n_moves")
 
@@ -137,9 +107,6 @@ class BitBoard:
         return b
 
 
-# ==============================================================================
-# Funciones auxiliares
-# ==============================================================================
 
 def _would_win_bb(bb: BitBoard, col: int, player: int) -> bool:
     """True si colocar en col gana inmediatamente para player."""
@@ -157,23 +124,9 @@ def _count_threats(bb: BitBoard, player: int) -> int:
                if bb.is_valid_col(c) and _would_win_bb(bb, c, player))
 
 
-# ==============================================================================
-# Nodo MCTS con RAVE
-# ==============================================================================
 
 class _Node:
-    """
-    Nodo del árbol MCTS con estadísticas UCB1 y RAVE.
-
-    UCB1 clásico usa solo las simulaciones que pasaron por este nodo.
-    RAVE añade estadísticas de todas las simulaciones donde se jugó
-    esta acción en cualquier punto — acelera enormemente el aprendizaje.
-
-    Atributos RAVE
-    --------------
-    rave_wins   : dict[int, float]  → victorias RAVE por acción
-    rave_visits : dict[int, int]    → visitas RAVE por acción
-    """
+    
 
     __slots__ = ("bb","parent","action","children","visits","wins",
                  "_untried","_terminal","rave_wins","rave_visits")
@@ -191,14 +144,7 @@ class _Node:
         self.rave_visits : dict = {}
 
     def ucb1_rave(self, c: float, k_rave: float) -> float:
-        """
-        UCB1 + RAVE:
-            score = (1-β)·Q_mcts  +  β·Q_rave  +  c·sqrt(ln(N_padre)/N)
-
-        β = sqrt(k / (3·N + k))
-        → Cuando N es pequeño: β≈1, RAVE domina (información global).
-        → Cuando N crece: β≈0, UCB1 domina (información local precisa).
-        """
+        
         if self.visits == 0:
             return float("inf")
         q_mcts  = self.wins / self.visits
@@ -228,34 +174,10 @@ class _Node:
         return child
 
 
-# ==============================================================================
-# Agente principal
-# ==============================================================================
+
 
 class MCTSVale(Policy):
-    """
-    Agente Connect-4: MCTS + UCB1 + RAVE + Bitboard + Fork detection.
-
-    Mejoras sobre MCTS básico
-    --------------------------
-    1. Bitboard: tablero como enteros de 64 bits → ~10x más rápido que numpy.
-    2. RAVE: estadísticas globales por acción → convergencia más rápida.
-    3. Ordenamiento centro-primero → MCTS encuentra buenas jugadas antes.
-    4. Fork detection: detecta y crea/bloquea dobles amenazas (garantiza victoria).
-
-    Parámetros
-    ----------
-    n_simulations : int
-        Simulaciones por movimiento. Variable principal del análisis.
-        Valores sugeridos para experimentos: [50, 100, 200, 500, 1000].
-    c : float
-        Constante de exploración UCB1. sqrt(2) ≈ 1.414 es el óptimo teórico.
-    k_rave : float
-        Balance RAVE. Valores típicos: 100–500.
-    use_heuristic : bool
-        True  → rollout con reglas ganar/bloquear (más inteligente).
-        False → rollout completamente aleatorio.
-    """
+    
 
     def __init__(
         self,
@@ -283,10 +205,7 @@ class MCTSVale(Policy):
         return node
 
     def _rollout(self, bb: BitBoard, root_player: int) -> tuple:
-        """
-        Simula partida completa. Retorna (reward, acciones_jugadas).
-        Las acciones se usan para actualizar estadísticas RAVE.
-        """
+        
         current = bb.copy()
         actions = []
         while not current.is_terminal():
@@ -314,7 +233,7 @@ class MCTSVale(Policy):
         return reward, actions
 
     def _backpropagate(self, node: _Node, reward: float, rollout_actions: list) -> None:
-        """Sube actualizando UCB1 y estadísticas RAVE."""
+        
         current = node
         while current is not None:
             current.visits += 1
@@ -340,10 +259,7 @@ class MCTSVale(Policy):
         return best.action
 
     def _find_fork(self, bb: BitBoard, player: int) -> int | None:
-        """
-        Busca movimiento que cree 2+ amenazas simultáneas (fork).
-        Si existe, el oponente no puede bloquear ambas → victoria garantizada.
-        """
+        
         for col in bb.free_cols():
             tmp = bb.copy()
             tmp.player = player
@@ -354,14 +270,7 @@ class MCTSVale(Policy):
 
     @override
     def act(self, s: np.ndarray) -> int:
-        """
-        Prioridades de decisión:
-        1. Ganar inmediatamente.
-        2. Bloquear victoria inmediata del oponente.
-        3. Crear fork propio (doble amenaza garantiza victoria).
-        4. Bloquear fork del oponente.
-        5. MCTS + UCB1 + RAVE.
-        """
+        
         bb  = BitBoard.from_numpy(s)
         our = bb.player
         opp = -our
