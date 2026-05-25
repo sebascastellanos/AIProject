@@ -8,6 +8,13 @@ participants = find_importable_classes("groups", Policy)
 # Build a participant list (name, class)
 players = list(participants.items())
 
+# Build a participant list (name, class)
+players = [
+    participant
+    for participant in participants.items()
+    if participant[0] not in ignored_players
+]
+
 # Run the tournament
 champion = run_tournament(
     players,
