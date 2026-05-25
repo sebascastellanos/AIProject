@@ -3,10 +3,12 @@ from connect4.utils import find_importable_classes
 from tournament import run_tournament, play
 
 # Read all files within subfolder of "groups"
-participants = find_importable_classes("groups", Policy)
+participants = find_importable_classes("groups", Policy) #
 
 # Build a participant list (name, class)
 players = list(participants.items())
+
+
 
 # Run the tournament
 champion = run_tournament(
