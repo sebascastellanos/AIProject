@@ -6,10 +6,7 @@ from tournament import run_tournament, play
 participants = find_importable_classes("groups", Policy)
 
 # Build a participant list (name, class)
-#players = list(participants.items())
-
-# Solo prueba
-ignored_players = ["Sebastian_ADP"]
+players = list(participants.items())
 
 # Build a participant list (name, class)
 players = [
