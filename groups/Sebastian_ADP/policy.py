@@ -25,23 +25,7 @@ def _would_win(board: np.ndarray, col: int, player: int) -> bool:
 
 
 class SebastianADP(Policy):
-    """
-    Connect-4 agent via Adaptive Dynamic Programming.
-
-    mount() learns the MDP model (P̂, R̂) from self-play trials against a
-    random opponent, then runs value iteration to compute Q-values.
-    act() selects the greedy action using those Q-values, with hard rules
-    for immediate wins and blocks.
-
-    Parameters
-    ----------
-    n_trials : int
-        Number of training games (main configurable parameter).
-    gamma : float
-        Discount factor applied in value iteration.
-    vi_iters : int
-        Bellman sweeps after model estimation.
-    """
+    
 
     def __init__(self, n_trials: int = 500, gamma: float = 0.95, vi_iters: int = 30):
         self.n_trials = n_trials
@@ -62,9 +46,11 @@ class SebastianADP(Policy):
         self.P_hat.clear()
         self.R_hat.clear()
         self.V.clear()
+        self.episode_rewards: list[float] = []   # <-- nuevo
         rng = np.random.default_rng(42)
         for _ in range(self.n_trials):
-            self._run_trial(rng, explore=True)
+            r = self._run_trial(rng, explore=True)
+            self.episode_rewards.append(r)       # <-- nuevo
         self._build_model()
         self._value_iteration()
 
@@ -88,7 +74,7 @@ class SebastianADP(Policy):
         key = _board_key(norm)
         return max(avail, key=lambda c: self._get_q(key, c, norm))
 
-    def _run_trial(self, rng: np.random.Generator, explore: bool = True) -> None:
+    def _run_trial(self, rng: np.random.Generator, explore: bool = True) -> float:
         """One game: our agent vs random opponent.
 
         explore=True  → random after win/block (broad model coverage).
@@ -102,7 +88,7 @@ class SebastianADP(Policy):
             avail = state.get_free_cols()
             state = state.transition(int(rng.choice(avail)))
             if state.is_final():
-                return
+                return 0.0
 
         while not state.is_final():
             # --- OUR TURN ---
@@ -118,7 +104,7 @@ class SebastianADP(Policy):
                 w = state.get_winner()
                 r = 1.0 if w == our else (0.0 if w == 0 else -1.0)
                 self._outcomes[(key, action)].append((None, r))
-                break
+                return r
 
             # --- OPPONENT TURN (random) ---
             opp_avail = state.get_free_cols()
@@ -128,10 +114,11 @@ class SebastianADP(Policy):
                 w = state.get_winner()
                 r = 1.0 if w == our else (0.0 if w == 0 else -1.0)
                 self._outcomes[(key, action)].append((None, r))
-                break
+                return r
             else:
                 next_key = _board_key(state.board * our)
                 self._outcomes[(key, action)].append((next_key, 0.0))
+        return 0.0
 
     # ------------------------------------------------------------------
     # Model estimation
@@ -198,7 +185,7 @@ class SebastianADP(Policy):
                             window.append(norm_board[nr, nc])
                     if len(window) == 4:
                         mine = window.count(1)
-                        opp  = window.count(-1)
+                        opp = window.count(-1)
                         if opp == 0 and mine > 0:
                             score += (0.02, 0.10, 0.60)[mine - 1]
                         elif mine == 0 and opp > 0:
@@ -254,7 +241,8 @@ class SebastianADP(Policy):
             return max(opp_now, key=lambda c: self._get_q(key, c, norm_s))
 
         # Priority 3: prefer moves that don't open a new threat for the opponent.
-        safe = [col for col in available if self._is_two_ply_safe(s, col, our, opp)]
+        safe = [col for col in available if self._is_two_ply_safe(
+            s, col, our, opp)]
 
         if safe:
             # Priority 4a: greedy ADP Q-values over safe candidates.
@@ -281,6 +269,7 @@ class SebastianADP(Policy):
 
         best_col = min(
             available,
-            key=lambda c: (n_opp_threats_after(c), -self._get_q(key, c, norm_s))
+            key=lambda c: (n_opp_threats_after(
+                c), -self._get_q(key, c, norm_s))
         )
         return best_col
