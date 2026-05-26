@@ -248,3 +248,4 @@ class SebastianADP(Policy):
                 c), -self._get_q(key, c, norm_s))
         )
         return best_col
+
